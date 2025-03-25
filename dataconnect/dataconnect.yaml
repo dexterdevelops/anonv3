@@ -1,0 +1,12 @@
+specVersion: "v1beta"
+serviceId: "anonymous-chitchat"
+location: "asia-southeast1"
+schema:
+  source: "./schema"
+  datasource:
+    postgresql:
+      database: "fdcdb"
+      cloudSql:
+        instanceId: "anonymous-chitchat-fdc"
+      # schemaValidation: "COMPATIBLE"
+connectorDirs: ["./connector"]

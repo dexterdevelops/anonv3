@@ -1,0 +1,12 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "messages",
+      "fields": [
+        { "fieldPath": "senderId", "mode": "ASCENDING" },
+        { "fieldPath": "timestamp", "mode": "ASCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}
