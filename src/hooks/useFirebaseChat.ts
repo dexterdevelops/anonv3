@@ -82,7 +82,26 @@ export function useFirebaseChat(userId: string | undefined) {
           chatData.push(chat);
         }
       });
-      setChats(chatData);
+
+      // --- Auto-activate chat for waiting user ---
+      // Check if the current activeChat state is null *before* potentially setting it.
+      // This prevents overriding an already active chat if the snapshot updates.
+      // We also check if exactly one 'online' chat exists for this user now.
+      if (activeChat === null && chatData.length === 1) {
+        const newChatId = chatData[0].id;
+        console.log(`Auto-activating new chat for waiting user: ${newChatId}`);
+        // Use a function update to safely set state based on previous state
+        setActiveChat(prevActiveChat => {
+          // Only update if it was indeed null before this snapshot update
+          if (prevActiveChat === null) {
+            return newChatId;
+          }
+          return prevActiveChat; // Otherwise, keep the existing active chat
+        });
+      }
+      // --- End auto-activate ---
+
+      setChats(chatData); // Update the list of chats
       setLoading(false);
     }, (err) => {
       setError(err.message);
@@ -331,10 +350,10 @@ export function useFirebaseChat(userId: string | undefined) {
               status: "read"
             });
 
-            toast({
-              title: "Partner Found!",
-              description: "Starting your chat..."
-            });
+            // Partner found - Set active chat directly instead of toast
+            setActiveChat(chatRef.id); 
+            console.log("Partner found, setting active chat:", chatRef.id); // Add log for debugging
+
             return chatRef.id; // Return the new chat ID - Match successful!
           }
           // If partnerQueueSnap didn't exist, they were matched by someone else, continue loop

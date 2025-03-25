@@ -1,43 +1,38 @@
 import { useState, useEffect } from "react";
-// Removed ArrowLeft import as mobile menu button is gone
 import { Button } from "@/components/ui/button";
+import { Loader2 } from "lucide-react"; // Import loader icon
 import { useToast } from "@/hooks/use-toast";
-// Removed UserDashboard import
 import { useNavigate } from "react-router-dom";
-import { useIsMobile } from "@/hooks/use-mobile";
+// Removed useIsMobile import as it's not used directly here
 import ChatHeader from "@/components/ChatHeader";
 import ChatMessageList from "@/components/ChatMessageList";
 import MessageInput from "@/components/MessageInput";
 import NetworkStatus from "@/components/NetworkStatus";
-// Removed useFirebaseAuth and useFirebaseChat imports
 import { generateFunkyName } from "@/utils/nameGenerator";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { useFriendRequests } from "@/hooks/useFriendRequests"; // Import friend request hook
 import { useLayoutContext, ChatItem, Message } from '@/components/Layout'; // Import context hook and types
 
-// Removed duplicate Chat interface definition
-
 const Index = () => {
-  // Removed isMobile and mobileMenuOpen state
   const [message, setMessage] = useState("");
-  // Removed friendRequestSent state
   const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
+  const [isSearching, setIsSearching] = useState(false); // Add searching state
   const { toast } = useToast();
   const navigate = useNavigate();
 
   // Get state and functions from LayoutContext
   const {
     user,
-    chats, // Already mapped in LayoutContext
+    chats,
     messages,
     activeChat,
-    // setActiveChat is used in Layout/Sidebar, not directly needed here unless for specific actions
-    sendMessage: contextSendMessage, // Renamed
-    startNewChat: contextStartNewChat, // Renamed
-    endChat: contextEndChat, // Renamed
-    sendFriendRequest: contextSendFriendRequest, // Renamed
-    // Get active chat partner ID
+    sendMessage: contextSendMessage,
+    startNewChat: contextStartNewChat,
+    endChat: contextEndChat,
+    sendFriendRequest: contextSendFriendRequest,
     activeChatPartnerId,
+    // Add cancelChatSearch if implemented in LayoutContext/useFirebaseChat
+    // cancelChatSearch: contextCancelSearch,
   } = useLayoutContext();
 
   // Use the friend request hook for the active chat
@@ -45,9 +40,7 @@ const Index = () => {
     activeChatRequestStatus,
     activeChatRequestId,
     acceptFriendRequest,
-    // loading: friendRequestLoading, // Optional loading state
   } = useFriendRequests(user?.uid, activeChatPartnerId);
-
 
   // Nickname state remains local to Index for now
   const [userNickname, setUserNickname] = useState<string>(() => {
@@ -65,20 +58,39 @@ const Index = () => {
   }, [user, userNickname]);
 
   // Online status management
-  const { isOnline, isOffline } = useOnlineStatus(user?.uid);
-
-  // Removed friendRequestSent reset effect
-
-  // Removed handleChatSelect as selection is handled in Layout/Sidebar
+  const { isOffline } = useOnlineStatus(user?.uid); // Simplified: only need isOffline
 
   const handleNewChat = async () => {
-    toast({
-      title: "New Chat",
-      description: "Starting a new anonymous chat...",
-    });
-    // Use context function - setActiveChat will be called within useFirebaseChat hook
-    await contextStartNewChat(userNickname);
+    // Don't show initial toast, use searching indicator instead
+    setIsSearching(true); // Set searching state to true
+    try {
+      // Use context function - setActiveChat will be called within useFirebaseChat hook if match found
+      await contextStartNewChat(userNickname);
+      // If the function completes and activeChat is still null, it means the user was added to the queue.
+      // The searching state will remain true until a chat becomes active or the user cancels.
+      // We might need a way to cancel the search.
+    } catch (error) {
+      console.error("Error starting new chat:", error);
+      // Optionally show an error toast here
+      setIsSearching(false); // Reset searching state on error
+    }
+    // Removed finally block - keep searching indicator if added to queue
   };
+
+  // Effect to stop searching indicator if activeChat becomes available
+  useEffect(() => {
+    if (activeChat) {
+      setIsSearching(false);
+    }
+  }, [activeChat]);
+
+  // Optional: Add a function to handle cancelling the search
+  // const handleCancelSearch = async () => {
+  //   if (user?.uid && contextCancelSearch) { // Check if cancel function exists
+  //     await contextCancelSearch(user.uid);
+  //     setIsSearching(false);
+  //   }
+  // };
 
   const handleEndChat = () => {
     if (activeChat && user?.uid) {
@@ -89,7 +101,6 @@ const Index = () => {
   const handleSendFriendRequest = () => {
     if (activeChat) {
       contextSendFriendRequest(activeChat); // Use context function
-      // No need to set local state anymore, status comes from hook
     }
   };
 
@@ -111,7 +122,6 @@ const Index = () => {
 
   const handleAttachment = (file: File) => {
     setAttachmentFile(file);
-    // Preview logic remains the same
     if (file.type.startsWith('image')) {
       const imageUrl = URL.createObjectURL(file);
       navigate("/image-viewer", { state: { imageUrl, isPreview: true } });
@@ -129,18 +139,13 @@ const Index = () => {
     }
   };
 
-  // Loading state is handled by Layout.tsx
-
   // Get current chat details from context chats array
   const currentChat = chats.find(chat => chat.id === activeChat);
 
   // Disable actions when offline
-  const isNetworkDisabled = isOffline; // Simplified based on useOnlineStatus hook
-
-  // Removed mappedChats as chats from context are already mapped
+  const isNetworkDisabled = isOffline;
 
   return (
-    // The outer div is now managed by Layout.tsx, we just provide the content
     <div className="flex-1 overflow-hidden h-full">
       {/* Main content area */}
       {activeChat ? (
@@ -151,23 +156,20 @@ const Index = () => {
             chatName={currentChat?.name}
             isOnline={currentChat?.online}
             isOffline={isNetworkDisabled}
-            // onMobileMenuOpen is no longer needed
             onEndChat={handleEndChat}
             onSendFriendRequest={handleSendFriendRequest}
-            onAcceptFriendRequest={handleAcceptFriendRequest} // Pass accept handler
-            friendRequestStatus={activeChatRequestStatus} // Pass status from hook
-            nickname={userNickname} // Pass nickname if needed by header
+            onAcceptFriendRequest={handleAcceptFriendRequest}
+            friendRequestStatus={activeChatRequestStatus}
+            nickname={userNickname}
           />
-
           <ChatMessageList
             activeChat={activeChat}
             currentUserId={user?.uid}
-            messages={messages} // Pass messages directly from context
-            isTyping={false} // Placeholder for typing indicator logic
-            onNewChat={handleNewChat} // Keep CTA trigger? Or remove if only from main CTA?
+            messages={messages}
+            isTyping={false} // Placeholder
+            onNewChat={handleNewChat} // Keep CTA trigger?
             viewAttachment={viewAttachment}
           />
-
           <MessageInput
             message={message}
             isOffline={isNetworkDisabled}
@@ -176,8 +178,26 @@ const Index = () => {
             onAttachment={handleAttachment}
           />
         </div>
+      ) : isSearching ? (
+        // Display Searching indicator
+        <div className="h-full flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-800">
+          <div className="text-center p-8 flex flex-col items-center">
+            <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
+            <h2 className="text-xl font-semibold mb-2 text-gray-800 dark:text-gray-200">Searching for a partner...</h2>
+            <p className="text-gray-600 dark:text-gray-400 mb-6">
+              Please wait while we connect you with someone.
+            </p>
+            {/* Optional: Add Cancel Button */}
+            {/* <Button variant="outline" onClick={handleCancelSearch} disabled={isNetworkDisabled}>
+              Cancel Search
+            </Button> */}
+            {isNetworkDisabled && (
+              <p className="text-red-500 text-sm mt-4">You are offline. Please check your connection.</p>
+            )}
+          </div>
+        </div>
       ) : (
-        // Display "Start Chatting" CTA if no chat is active
+        // Display "Start Chatting" CTA if no chat is active and not searching
         <div className="h-full flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-800">
           <div className="text-center p-8">
             <h2 className="text-2xl font-semibold mb-4 text-gray-800 dark:text-gray-200">Welcome to Anonymous ChitChat!</h2>
@@ -199,7 +219,7 @@ const Index = () => {
         </div>
       )}
 
-      {/* Offline indicator - Keep it accessible */}
+      {/* Offline indicator */}
       <NetworkStatus userId={user?.uid} />
     </div>
   );
